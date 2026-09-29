@@ -34,19 +34,22 @@ export async function fetchVideoInfo(id: string, _cookie?: string): Promise<Vide
 
   const data = await fetchVideoInfoDirect(bvid);
 
+  // app.bilibili.com wraps in data.data sometimes
+  const vd = data.data || data;
+
   return {
-    aid: data.aid,
-    bvid: data.bvid,
-    title: data.title,
-    desc: data.desc || '',
-    pic: data.pic,
-    pubDate: data.pubdate,
-    duration: data.duration,
-    ownerName: data.owner?.name || '',
-    ownerMid: data.owner?.mid || 0,
+    aid: vd.aid,
+    bvid: vd.bvid,
+    title: vd.title,
+    desc: vd.desc || '',
+    pic: vd.pic,
+    pubDate: vd.pubdate,
+    duration: vd.duration,
+    ownerName: vd.owner?.name || '',
+    ownerMid: vd.owner?.mid || 0,
     isBangumi: false,
     isInteractive: false,
-    pages: (data.pages || []).map((p: any) => ({
+    pages: (vd.pages || []).map((p: any) => ({
       cid: p.cid,
       page: p.page,
       title: p.part || p.title || `Part ${p.page}`,
