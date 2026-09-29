@@ -60,55 +60,134 @@ export default function DownloadPage() {
     eta: '00:00'
   });
 
-  const handleFetch = (e: React.FormEvent) => {
+  const handleFetch = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!url.trim()) return;
     setLoading(true);
-    // Mock fetch for demonstration
-    setTimeout(() => {
-      setInfo({
-        title: '【Bilibili】Mock Video Full Features',
-        author: 'BiliCreator',
-        pic: 'https://archive.biliapi.net/bvid/BV1xx411c7mD',
-        desc: 'This is a mock description containing lots of details about the video.',
-        duration: '12:34',
-        bvid: 'BV1xx411c7mD',
-        avid: 'av12345678',
-        pubDate: '2023-10-01',
-        viewCount: '1.2M',
-        likeCount: '256K',
-        pages: [
-          { id: 1, title: 'Part 1: Introduction', duration: '05:00', pic: '' },
-          { id: 2, title: 'Part 2: Main Content', duration: '05:00', pic: '' },
-          { id: 3, title: 'Part 3: Conclusion', duration: '02:34', pic: '' }
-        ],
-        qualities: [
-          { id: '120', name: '4K 超清', resolution: '3840x2160', codec: 'HEVC', fps: 60, size: '850MB', isVip: true },
-          { id: '116', name: '1080P 60帧', resolution: '1920x1080', codec: 'HEVC', fps: 60, size: '150MB', isVip: true },
-          { id: '80', name: '1080P 高清', resolution: '1920x1080', codec: 'AVC', fps: 30, size: '120MB' },
-          { id: '64', name: '720P 高清', resolution: '1280x720', codec: 'AVC', fps: 30, size: '80MB' },
-        ],
-        audioQualities: [
-          { id: '30280', name: 'Hi-Res FLAC', codec: 'FLAC', size: '45MB', badge: 'platinum' },
-          { id: '30250', name: 'Dolby Atmos', codec: 'EC-3', size: '30MB', badge: 'golden' },
-          { id: '30232', name: 'Standard', codec: 'AAC', size: '15MB', badge: 'none' },
-        ]
-      });
-      setSelectedQuality('80');
-      setSelectedAudioQuality('30232');
-      setSelectedPages([1]);
+    setInfo(null);
+    try {
+      const parsed = parseInputUrl(url);
+      const cookie = localStorage.getItem('BILI_SESSDATA') || undefined;
+      const accessToken = localStorage.getItem('BILI_ACCESS_TOKEN') || undefined;
+      
+      let videoInfo;
+      if (parsed.type === 'bangumi') {
+        videoInfo = await fetchBangumiInfo(parsed.id, cookie);
+      } else {
+        videoInfo = await fetchVideoInfo(parsed.id, cookie);
+      }
+      
+      // Get play URLs for first page
+      const cid = videoInfo.pages[0]?.cid;
+      if (cid) {
+        const dash = await getPlayUrl(String(videoInfo.aid), String(cid), {
+          useTvApi: apiMode === 'tv',
+          cookie,
+          accessToken,
+        });
+        const qualities = buildQualityOptions(dash);
+        
+        setInfo({
+          title: videoInfo.title,
+          author: videoInfo.ownerName,
+          pic: videoInfo.pic,
+          desc: videoInfo.desc,
+          duration: formatDuration(videoInfo.duration),
+          bvid: videoInfo.bvid,
+          avid: 'av' + videoInfo.aid,
+          pages: videoInfo.pages.map((p: any) => ({
+            id: p.page,
+            title: p.title,
+            duration: formatDuration(p.duration),
+            cid: p.cid,
+          })),
+          qualities: qualities.map((q: any) => ({
+            id: String(q.qn),
+            name: q.name,
+            resolution: q.resolution,
+            codec: q.codec,
+            fps: parseInt(q.fps as any) || 30,
+            size: q.estimatedSize,
+            videoUrl: q.videoUrl,
+            audioUrl: q.audioUrl,
+          })),
+          audioQualities: [],  // from dash.audioStreams if available
+          dash,
+        });
+        if (qualities.length > 0) {
+          setSelectedQuality(String(qualities[0].qn));
+        }
+        setSelectedPages([1]);
+      }
+    } catch (err: any) {
+      alert('Error: ' + (err.message || 'Failed to fetch video info'));
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
-  const handleDownload = () => {
+  function formatDuration(seconds: number): string {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+
+  const handleDownload = async () => {
+    if (!info || !selectedQuality) return;
     setIsDownloading(true);
-    setProgress({ step: 'Fetching Info', videoPercent: 0, audioPercent: 0, mergePercent: 0, speed: '0 MB/s', eta: '--:--' });
     
-    setTimeout(() => setProgress(p => ({ ...p, step: 'Downloading Video', videoPercent: 45, speed: '5.2 MB/s', eta: '00:45' })), 2000);
-    setTimeout(() => setProgress(p => ({ ...p, step: 'Downloading Audio', videoPercent: 100, audioPercent: 60, speed: '3.1 MB/s', eta: '00:10' })), 4000);
-    setTimeout(() => setProgress(p => ({ ...p, step: 'Merging', audioPercent: 100, mergePercent: 50, speed: '-', eta: '-' })), 6000);
-    setTimeout(() => setProgress(p => ({ ...p, step: 'Done!', mergePercent: 100 })), 8000);
+    try {
+      const quality = info.qualities.find((q: any) => q.id === selectedQuality);
+      if (!quality) throw new Error('Quality not found');
+      
+      const videoStreamUrl = getStreamUrl(quality.videoUrl);
+      const audioStreamUrl = quality.audioUrl ? getStreamUrl(quality.audioUrl) : null;
+      
+      setProgress(p => ({ ...p, step: 'Downloading Video...', videoPercent: 0 }));
+      
+      const videoData = await downloadFile(videoStreamUrl, (prog: any) => {
+        setProgress(p => ({ ...p, videoPercent: prog.percentage, speed: formatSpeed(prog.speed) }));
+      });
+      
+      if (audioStreamUrl && !options.videoOnly) {
+        setProgress(p => ({ ...p, step: 'Downloading Audio...', videoPercent: 100, audioPercent: 0 }));
+        const audioData = await downloadFile(audioStreamUrl, (prog: any) => {
+          setProgress(p => ({ ...p, audioPercent: prog.percentage, speed: formatSpeed(prog.speed) }));
+        });
+        
+        setProgress(p => ({ ...p, step: 'Merging...', audioPercent: 100, mergePercent: 0 }));
+        try {
+          await loadFFmpeg((p: any) => setProgress(prev => ({ ...prev, mergePercent: p * 50 })));
+          const merged = await mergeVideoAudio(videoData, audioData, `${info.title}.mp4`, (p: any) => {
+            setProgress(prev => ({ ...prev, mergePercent: 50 + p * 50 }));
+          });
+          saveFileToPC(merged, `${info.title}.mp4`);
+        } catch (ffmpegErr) {
+          // ffmpeg failed (e.g., no SharedArrayBuffer on GitHub Pages)
+          // Save video and audio separately
+          console.warn('FFmpeg merge failed, saving separately:', ffmpegErr);
+          saveFileToPC(videoData, `${info.title}_video.mp4`);
+          saveFileToPC(audioData, `${info.title}_audio.m4a`, 'audio/mp4');
+        }
+      } else {
+        // Video only or no audio
+        saveFileToPC(videoData, `${info.title}.mp4`);
+      }
+      
+      setProgress(p => ({ ...p, step: 'Done!', mergePercent: 100 }));
+    } catch (err: any) {
+      alert('Download failed: ' + (err.message || 'Unknown error'));
+      setProgress(p => ({ ...p, step: 'Failed' }));
+    } finally {
+      setIsDownloading(false);
+    }
   };
+
+  function formatSpeed(bytesPerSec: number): string {
+    if (bytesPerSec < 1024) return bytesPerSec.toFixed(0) + ' B/s';
+    if (bytesPerSec < 1048576) return (bytesPerSec / 1024).toFixed(1) + ' KB/s';
+    return (bytesPerSec / 1048576).toFixed(1) + ' MB/s';
+  }
 
   const togglePage = (id: number) => {
     setSelectedPages(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
