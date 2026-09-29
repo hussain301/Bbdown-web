@@ -1,3 +1,5 @@
+
+
 const DEFAULT_PROXY = 'https://bbdown-api.vercel.app';
 
 function getProxy(): string {
@@ -20,25 +22,34 @@ export async function proxyFetch(biliUrl: string, options?: {
 }): Promise<any> {
   const proxy = getProxy();
   const url = `${proxy}/api/proxy?url=${encodeURIComponent(biliUrl)}`;
-
   const headers: Record<string, string> = {};
   if (options?.cookie) headers['X-Cookie'] = options.cookie;
   if (options?.accessToken) headers['X-Access-Token'] = options.accessToken;
-  if (options?.method && options.method.toUpperCase() !== 'GET' && options.body) {
-    headers['Content-Type'] = 'application/x-www-form-urlencoded';
-  }
-
+  
   const response = await fetch(url, {
     method: options?.method || 'GET',
     headers,
     body: options?.body,
   });
+  return response.json();
+}
 
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+// Fetch video info via HTML scraping (bypasses 412!)
+export async function fetchVideoInfoDirect(bvid: string): Promise<any> {
+  const proxy = getProxy();
+  const response = await fetch(`${proxy}/api/video/info?bvid=${encodeURIComponent(bvid)}`);
+  const json = await response.json();
+  if (json.code !== 0) throw new Error(json.error || 'Failed to fetch video info');
+  return json.data;
+}
+
+// Fetch play URL via TV API (bypasses 412!)
+export async function fetchPlayUrlDirect(aid: string, cid: string, qn?: string): Promise<any> {
+  const proxy = getProxy();
+  const response = await fetch(`${proxy}/api/video/playurl?aid=${aid}&cid=${cid}&qn=${qn || '120'}`);
   return response.json();
 }
 
 export function getStreamUrl(cdnUrl: string): string {
-  const proxy = getProxy();
-  return `${proxy}/api/stream?url=${encodeURIComponent(cdnUrl)}`;
+  return `${getProxy()}/api/stream?url=${encodeURIComponent(cdnUrl)}`;
 }

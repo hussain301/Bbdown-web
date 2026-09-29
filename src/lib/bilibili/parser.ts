@@ -1,6 +1,5 @@
 import { DashResult, QualityOption, QUALITY_MAP } from './types';
-import { proxyFetch } from './proxy';
-import { getWbiKeys, getMixinKey, wbiSign, tvSign } from './signing';
+import { fetchPlayUrlDirect } from './proxy';
 
 export async function getPlayUrl(
   aid: string, cid: string, options: {
@@ -12,44 +11,9 @@ export async function getPlayUrl(
   }
 ): Promise<DashResult> {
   const avid = aid.replace(/[aA][vV]/, '');
-  let jsonRes: any = null;
-
-  if (options.useTvApi) {
-    let params: Record<string, string> = {
-      avid,
-      cid,
-      qn: options.qn || '120',
-      fourk: '1',
-      fnval: '4048', // dash
-      build: '103800',
-      device_id: 'C+0/T4mR2x/xTq/LqH+of6h/qH+of6h/qH+of6h/qH+o',
-      mobi_app: 'android_tv_yst',
-      platform: 'android',
-    };
-    if (options.accessToken) params['access_key'] = options.accessToken;
-    const query = tvSign(params);
-    jsonRes = await proxyFetch(`https://api.snm0516.aisee.tv/x/tv/playurl?${query}`, {
-        cookie: options.cookie
-    });
-  } else {
-    const keys = await getWbiKeys(options.cookie);
-    let params: Record<string, string> = {
-      avid,
-      cid,
-      qn: options.qn || '120',
-      fourk: '1',
-      fnval: '4048', // dash
-    };
-    let query = '';
-    if (keys.imgKey && keys.subKey) {
-        const mixin = getMixinKey(keys.imgKey, keys.subKey);
-        query = wbiSign(params, mixin);
-    } else {
-        const sp = new URLSearchParams(params);
-        query = sp.toString();
-    }
-    jsonRes = await proxyFetch(`https://api.bilibili.com/x/player/wbi/playurl?${query}`, { cookie: options.cookie });
-  }
+  
+  // Always use TV API via proxy (bypasses 412!)
+  const jsonRes = await fetchPlayUrlDirect(avid, cid, options.qn || '120');
 
   if (jsonRes.code !== 0) {
       throw new Error(`PlayUrl Error: ${jsonRes.message}`);

@@ -1,6 +1,5 @@
-import { proxyFetch } from './proxy';
+import { fetchVideoInfoDirect } from './proxy';
 import { VideoInfo } from './types';
-import { bv2av } from './converter';
 
 export function parseInputUrl(input: string): { type: 'video' | 'bangumi' | 'cheese' | 'unknown'; id: string } {
   input = input.trim();
@@ -24,55 +23,44 @@ export function parseInputUrl(input: string): { type: 'video' | 'bangumi' | 'che
   return { type: 'unknown', id: input };
 }
 
-export async function fetchVideoInfo(id: string, cookie?: string): Promise<VideoInfo> {
-  let apiUrl: string;
-  
-  if (id.toLowerCase().startsWith('bv')) {
-    const avid = bv2av(id);
-    if (avid > 0) {
-      apiUrl = `https://api.bilibili.com/x/web-interface/view?aid=${avid}`;
-    } else {
-      // New BV format — pass bvid directly
-      apiUrl = `https://api.bilibili.com/x/web-interface/view?bvid=${id}`;
-    }
-  } else if (id.toLowerCase().startsWith('av')) {
-    const avidNum = parseInt(id.replace(/[aA][vV]/, ''));
-    apiUrl = `https://api.bilibili.com/x/web-interface/view?aid=${avidNum}`;
-  } else {
-    apiUrl = `https://api.bilibili.com/x/web-interface/view?bvid=${id}`;
+export async function fetchVideoInfo(id: string, _cookie?: string): Promise<VideoInfo> {
+  // Use HTML page scraping — bypasses Bilibili 412 anti-bot!
+  let bvid = id;
+  if (id.toLowerCase().startsWith('av')) {
+    // For AV IDs, we need to use the bvid format for page URL
+    // The proxy will handle it
+    bvid = id;
   }
 
-  const res = await proxyFetch(apiUrl, { cookie });
-  
-  if (res.code !== 0) {
-    throw new Error(`API Error: ${res.message}`);
-  }
+  const data = await fetchVideoInfoDirect(bvid);
 
-  const data = res.data;
   return {
     aid: data.aid,
     bvid: data.bvid,
     title: data.title,
-    desc: data.desc,
+    desc: data.desc || '',
     pic: data.pic,
     pubDate: data.pubdate,
     duration: data.duration,
-    ownerName: data.owner.name,
-    ownerMid: data.owner.mid,
+    ownerName: data.owner?.name || '',
+    ownerMid: data.owner?.mid || 0,
     isBangumi: false,
     isInteractive: false,
-    pages: data.pages.map((p: any) => ({
+    pages: (data.pages || []).map((p: any) => ({
       cid: p.cid,
       page: p.page,
-      title: p.part,
+      title: p.part || p.title || `Part ${p.page}`,
       duration: p.duration
     }))
   };
 }
 
-export async function fetchBangumiInfo(epId: string, cookie?: string): Promise<VideoInfo> {
+export async function fetchBangumiInfo(epId: string, _cookie?: string): Promise<VideoInfo> {
+  // For bangumi, still try the proxy approach
+  // But most bangumi URLs contain BV IDs too
+  const { proxyFetch } = await import('./proxy');
   const epIdNum = parseInt(epId.replace(/[eE][pP]/, ''));
-  const res = await proxyFetch(`https://api.bilibili.com/pgc/view/web/season?ep_id=${epIdNum}`, { cookie });
+  const res = await proxyFetch(`https://api.bilibili.com/pgc/view/web/season?ep_id=${epIdNum}`);
   
   if (res.code !== 0) {
     throw new Error(`API Error: ${res.message}`);
