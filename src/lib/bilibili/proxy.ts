@@ -1,4 +1,4 @@
-const DEFAULT_PROXY = 'https://bbdown-proxy.hussainnariwal.workers.dev';
+const DEFAULT_PROXY = 'https://bbdown-api.vercel.app';
 
 function getProxy(): string {
   return localStorage.getItem('proxyUrl') || DEFAULT_PROXY;
