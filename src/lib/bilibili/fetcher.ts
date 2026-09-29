@@ -9,7 +9,7 @@ export function parseInputUrl(input: string): { type: 'video' | 'bangumi' | 'che
       return { type: 'unknown', id: input };
   }
 
-  const bvMatch = input.match(/[bB][vV]1[a-zA-Z0-9]{9}/);
+  const bvMatch = input.match(/[bB][vV]1[a-zA-Z0-9]{9,11}/);
   if (bvMatch) return { type: 'video', id: bvMatch[0] };
   
   const avMatch = input.match(/[aA][vV][0-9]+/);
@@ -25,15 +25,24 @@ export function parseInputUrl(input: string): { type: 'video' | 'bangumi' | 'che
 }
 
 export async function fetchVideoInfo(id: string, cookie?: string): Promise<VideoInfo> {
-  let aid = id;
+  let apiUrl: string;
+  
   if (id.toLowerCase().startsWith('bv')) {
-    aid = 'av' + bv2av(id);
+    const avid = bv2av(id);
+    if (avid > 0) {
+      apiUrl = `https://api.bilibili.com/x/web-interface/view?aid=${avid}`;
+    } else {
+      // New BV format — pass bvid directly
+      apiUrl = `https://api.bilibili.com/x/web-interface/view?bvid=${id}`;
+    }
   } else if (id.toLowerCase().startsWith('av')) {
-    aid = id;
+    const avidNum = parseInt(id.replace(/[aA][vV]/, ''));
+    apiUrl = `https://api.bilibili.com/x/web-interface/view?aid=${avidNum}`;
+  } else {
+    apiUrl = `https://api.bilibili.com/x/web-interface/view?bvid=${id}`;
   }
 
-  const avidNum = parseInt(aid.replace(/[aA][vV]/, ''));
-  const res = await proxyFetch(`https://api.bilibili.com/x/web-interface/view?aid=${avidNum}`, { cookie });
+  const res = await proxyFetch(apiUrl, { cookie });
   
   if (res.code !== 0) {
     throw new Error(`API Error: ${res.message}`);
