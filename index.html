@@ -12,7 +12,7 @@
         const redirect = sessionStorage.getItem('redirect');
         if (redirect) {
           sessionStorage.removeItem('redirect');
-          window.history.replaceState(null, '', redirect);
+          window.history.replaceState(null, '', '/Bbdown-web' + redirect);
         }
       })();
     </script>
