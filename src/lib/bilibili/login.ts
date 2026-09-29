@@ -1,8 +1,10 @@
-import { proxyFetch } from './proxy';
-import { generateTvLoginParams, tvSign } from './signing';
+import { getProxyUrl } from './proxy';
 
 export async function generateWebQR(): Promise<{ url: string; qrcodeKey: string }> {
-  const res = await proxyFetch('https://passport.bilibili.com/x/passport-login/web/qrcode/generate');
+  // Use dedicated login endpoint on worker (not generic proxy)
+  const proxy = getProxyUrl();
+  const response = await fetch(`${proxy}/api/login/web/qr/generate`);
+  const res = await response.json();
   if (res.code === 0) {
     return {
       url: res.data.url,
@@ -16,7 +18,9 @@ export async function pollWebLogin(qrcodeKey: string): Promise<{
   status: 'waiting' | 'scanned' | 'confirmed' | 'expired';
   cookie?: string;
 }> {
-  const res = await proxyFetch(`https://passport.bilibili.com/x/passport-login/web/qrcode/poll?qrcode_key=${qrcodeKey}`);
+  const proxy = getProxyUrl();
+  const response = await fetch(`${proxy}/api/login/web/qr/poll?qrcode_key=${qrcodeKey}`);
+  const res = await response.json();
   if (res.code === 0) {
     const code = res.data.code;
     if (code === 86101) return { status: 'waiting' };
@@ -30,14 +34,9 @@ export async function pollWebLogin(qrcodeKey: string): Promise<{
 }
 
 export async function generateTvQR(): Promise<{ url: string; authCode: string }> {
-  const params = generateTvLoginParams();
-  params.local_id = '0';
-  const query = tvSign(params);
-  
-  const res = await proxyFetch(`https://passport.bilibili.com/x/passport-tv-login/qrcode/auth_code`, {
-      method: 'POST',
-      body: query
-  });
+  const proxy = getProxyUrl();
+  const response = await fetch(`${proxy}/api/login/tv/qr/generate`);
+  const res = await response.json();
 
   if (res.code === 0) {
       return {
@@ -52,15 +51,9 @@ export async function pollTvLogin(authCode: string): Promise<{
   status: 'waiting' | 'scanned' | 'confirmed' | 'expired';
   accessToken?: string;
 }> {
-  const params = generateTvLoginParams();
-  params.auth_code = authCode;
-  params.local_id = '0';
-  const query = tvSign(params);
-
-  const res = await proxyFetch(`https://passport.bilibili.com/x/passport-tv-login/qrcode/poll`, {
-      method: 'POST',
-      body: query
-  });
+  const proxy = getProxyUrl();
+  const response = await fetch(`${proxy}/api/login/tv/qr/poll?auth_code=${authCode}`);
+  const res = await response.json();
 
   if (res.code === 0) {
       return {
@@ -85,7 +78,11 @@ export async function checkLoginStatus(cookie?: string): Promise<{
   vipLabel?: string;
 }> {
   if (!cookie) return { isLoggedIn: false };
-  const res = await proxyFetch('https://api.bilibili.com/x/web-interface/nav', { cookie });
+  const proxy = getProxyUrl();
+  const response = await fetch(`${proxy}/api/user/nav`, {
+    headers: { 'X-Cookie': cookie }
+  });
+  const res = await response.json();
   
   if (res.code === 0 && res.data.isLogin) {
       return {
