@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, useContext } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Home, Download, LogIn, Settings, Menu, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { AuthContext } from '../contexts/AuthContext';
 
 export default function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const auth = useContext(AuthContext);
 
   const navItems = [
     { to: '/', icon: <Home size={20} />, label: 'Dashboard' },
@@ -58,8 +60,10 @@ export default function Layout() {
           <div className="flex items-center justify-between">
             <span className="text-gray-400">Account</span>
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-red-500"></span>
-              <span className="text-gray-500">Not logged in</span>
+              <span className={`w-2 h-2 rounded-full ${auth.isLoggedIn ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span>
+              <span className={auth.isLoggedIn ? 'text-green-500' : 'text-gray-500'}>
+                {auth.isLoggedIn ? (auth.username || 'Logged in') : 'Not logged in'}
+              </span>
             </div>
           </div>
           <div className="text-center text-xs text-gray-600 mt-2">
