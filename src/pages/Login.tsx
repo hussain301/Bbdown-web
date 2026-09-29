@@ -28,6 +28,7 @@ export default function Login() {
   
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [showCredential, setShowCredential] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const expiryTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -134,7 +135,10 @@ export default function Login() {
         }
       }, 2000);
     } catch (err) {
-      console.error('Failed to generate QR code');
+      console.error('Failed to generate QR code', err);
+      setQrStatus('idle');
+      setSaveMessage({ type: 'error', text: '❌ QR code generation failed! Make sure Cloudflare Worker proxy is deployed and configured in Settings.' });
+      setTimeout(() => setSaveMessage(null), 8000);
     }
   };
 
@@ -150,26 +154,28 @@ export default function Login() {
 
   const handleManualSave = () => {
     if (!manualCookie.trim()) {
-      console.error('Please enter a valid cookie');
+      setSaveMessage({ type: 'error', text: '❌ Please enter a valid SESSDATA cookie!' });
       return;
     }
     localStorage.setItem('BILI_SESSDATA', manualCookie.trim());
     localStorage.setItem('BILI_LOGIN_METHOD', 'Manual');
-    console.log('Cookie saved successfully!');
+    setSaveMessage({ type: 'success', text: '✅ Cookie saved successfully! You are now logged in.' });
     setManualCookie('');
     loadProfile();
+    setTimeout(() => setSaveMessage(null), 5000);
   };
 
   const handleTokenSave = () => {
     if (!accessToken.trim()) {
-      console.error('Please enter a valid access token');
+      setSaveMessage({ type: 'error', text: '❌ Please enter a valid access token!' });
       return;
     }
     localStorage.setItem('BILI_ACCESS_TOKEN', accessToken.trim());
     localStorage.setItem('BILI_LOGIN_METHOD', 'Access Token');
-    console.log('Access Token saved successfully!');
+    setSaveMessage({ type: 'success', text: '✅ Access Token saved successfully! You are now logged in.' });
     setAccessToken('');
     loadProfile();
+    setTimeout(() => setSaveMessage(null), 5000);
   };
 
   const handleLogout = () => {
@@ -196,6 +202,16 @@ export default function Login() {
         <h1 className="text-4xl font-bold text-white tracking-tight">Account Login</h1>
         <p className="text-gray-400">Sign in to Bilibili to access 1080P+, 4K, and VIP member content.</p>
       </div>
+
+      {saveMessage && (
+        <div className={`p-4 rounded-xl text-center font-semibold text-lg mb-4 animate-pulse ${
+          saveMessage.type === 'success' 
+            ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+            : 'bg-red-500/20 text-red-400 border border-red-500/30'
+        }`}>
+          {saveMessage.text}
+        </div>
+      )}
 
       <AnimatePresence mode="wait">
         {userProfile ? (
