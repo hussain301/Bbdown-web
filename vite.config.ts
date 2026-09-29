@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  base: '/Bbdown-web/',  // GitHub Pages serves from repo name subfolder
+  base: '/',  // Vercel serves at root
   server: {
     port: 5173,
     headers: {
