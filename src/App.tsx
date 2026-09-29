@@ -1,13 +1,14 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import DownloadPage from './pages/Download';
 import Login from './pages/Login';
 import Settings from './pages/Settings';
+import { AuthProvider } from './contexts/AuthContext';
 
 function App() {
   return (
-    <BrowserRouter>
+    <AuthProvider>
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
@@ -16,7 +17,7 @@ function App() {
           <Route path="/settings" element={<Settings />} />
         </Route>
       </Routes>
-    </BrowserRouter>
+    </AuthProvider>
   );
 }
 
